@@ -37,7 +37,7 @@ class AirQualityAPIClient:
             response.raise_for_status()
 
 external_api_base = "http://api.airvisual.com"  
-api_key = "YOUR_API_KEY"  
+api_key = "2e571cb7-1717-4e12-94a2-5efddc5dba58"  
 backend_api_endpoint = "http://127.0.0.1:5000/data" 
 city = "Warsaw" 
 
