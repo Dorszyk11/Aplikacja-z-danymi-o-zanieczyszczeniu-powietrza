@@ -1,49 +1,56 @@
 import requests
 
-class AirQualityAPIClient:
-    def __init__(self, external_api_base, api_key, backend_api_endpoint):
-        self.external_api_base = external_api_base
+class AirQualityClient:
+    def __init__(self, api_key: str):
         self.api_key = api_key
-        self.backend_api_endpoint = backend_api_endpoint
+        self.base_url = "http://api.airvisual.com/v2"
+    
+    def get_station_air_quality(self, city: str, state: str, country: str) -> dict:
+        endpoint = f"{self.base_url}/city?city={city}&state={state}&country={country}&key={self.api_key}"
+        response = requests.get(endpoint)
+        if response.ok:
+            return response.json()
+        else:
+            raise Exception(f"API request failed with status code {response.status_code}")
 
-    def get_stations(self, city):
-        params = {
-            'city': city,
-            'key': self.api_key
+    def validate_and_format_data(self, data):
+        """ Validates and formats the data before sending it to the backend """
+        if 'data' not in data:
+            raise ValueError("Invalid data structure")
+        
+        temp = data['data']['current']['weather']['tp']
+        pressure = data['data']['current']['weather']['pr']
+        if not (-50 <= temp <= 50):
+            raise ValueError("Invalid temperature value")
+        if not (900 <= pressure <= 1100):
+            raise ValueError("Invalid pressure value")
+        
+        formatted_data = {
+            'city': "Warsaw",
+            'state': "Mazovia",
+            'country': "Poland",
+            'temperature': temp,
+            'pressure': pressure,
+            'air_quality_index': data['data']['current']['pollution']['aqius'],
+            'timestamp': data['data']['current']['weather']['ts']
         }
-        response = requests.get(f"{self.external_api_base}/v2/city", params=params)
-        if response.status_code == 200:
-            return response.json()['data']
+        return formatted_data
+
+    def send_data_to_backend(self, data, backend_url):
+        """ Sends the data to the backend server """
+        response = requests.post(backend_url, json=data)
+        if response.status_code == 201:
+            print("Data sent successfully")
         else:
-            response.raise_for_status()
+            print(f"Failed to send data: {response.status_code}")
 
-    def get_air_quality_data(self, station_id):
-        params = {
-            'key': self.api_key 
-        }
-        response = requests.get(f"{self.external_api_base}/v2/station/{station_id}", params=params)
-        if response.status_code == 200:
-            return response.json()['data']
-        else:
-            response.raise_for_status()
-
-    def send_data_to_backend(self, data):
-        # Wysyłanie danych do backendu
-        response = requests.post(self.backend_api_endpoint, json=data)
-        if response.status_code in [200, 201]:
-            print("Data successfully sent to backend.")
-        else:
-            print(f"Failed to send data to backend, status code: {response.status_code}")
-            response.raise_for_status()
-
-external_api_base = "http://api.airvisual.com"  
-api_key = "2e571cb7-1717-4e12-94a2-5efddc5dba58"  
-backend_api_endpoint = "http://127.0.0.1:5000/data" 
-city = "Warsaw" 
-
-client = AirQualityAPIClient(external_api_base, api_key, backend_api_endpoint)
-stations = client.get_stations(city)
-if stations:
-    for station in stations:
-        air_quality_data = client.get_air_quality_data(station['id'])
-        client.send_data_to_backend(air_quality_data)
+if __name__ == "__main__":
+    api_key = "fd2bef12-6cbd-46f0-a58e-3c45bb93f036"
+    backend_url = "http://localhost:5000/data"
+    client = AirQualityClient(api_key)
+    try:
+        air_quality_data = client.get_station_air_quality("Warsaw", "Mazovia", "Poland")
+        formatted_data = client.validate_and_format_data(air_quality_data)
+        client.send_data_to_backend(formatted_data, backend_url)
+    except Exception as e:
+        print(f"Error: {e}")
