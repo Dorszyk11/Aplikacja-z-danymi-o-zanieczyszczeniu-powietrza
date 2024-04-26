@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from flask.views import MethodView
-from datetime import datetime
+from datetime import datetime, timezone
 import pytz
 from typing import Optional, List
 import pydantic
@@ -9,7 +9,7 @@ app = Flask(__name__)
 
 def normalize_datetime(dt):
     if dt.tzinfo is not None:
-        dt = dt.astimezone(pytz.utc).replace(tzinfo=None)
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
     return dt
 
 class DataStorage:
@@ -29,8 +29,6 @@ class DataStorage:
             )
         except ValueError:
             return None
-
-storage = DataStorage()
 
 class WeatherAndAirQualityData(pydantic.BaseModel):
     timestamp: datetime
@@ -58,14 +56,22 @@ class AirQualityDataView(MethodView):
     def post(self):
         data = request.json
         try:
-            data['timestamp'] = normalize_datetime(datetime.fromisoformat(data['timestamp']))
+            timestamp_str = data['timestamp']
+            if timestamp_str.endswith('Z'):
+                timestamp_str = timestamp_str[:-1]  # Remove the 'Z'
+            data['timestamp'] = normalize_datetime(datetime.fromisoformat(timestamp_str).replace(tzinfo=timezone.utc))
             record = WeatherAndAirQualityData(**data)
             storage.add_record(record)
             return jsonify(record.dict()), 201
         except pydantic.ValidationError as e:
             return jsonify({"error": str(e)}), 400
+        except ValueError as e:
+            return jsonify({"error": "Invalid datetime format"}), 400
+
+storage = DataStorage()
 
 app.add_url_rule('/data', view_func=AirQualityDataView.as_view('data_api'))
 
 if __name__ == '__main__':
     app.run(debug=True)
+ 
