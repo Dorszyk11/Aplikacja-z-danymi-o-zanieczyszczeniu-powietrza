@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify
 from flask.views import MethodView
 from datetime import datetime, timezone
-import pytz
 from typing import Optional, List
 import pydantic
 
